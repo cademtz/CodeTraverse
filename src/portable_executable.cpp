@@ -146,7 +146,7 @@ void CPortableExecutable::WriteMappedToFile()
 		void* src = m_img + sect[i].VirtualAddress;
 		DWORD size = sect[i].SizeOfRawData;
 
-		if (!IsInBounds(src, size) || (size_t)sect[i].PointerToRawData + size > m_filelen);
+		if (!IsInBounds(src, size) || (size_t)sect[i].PointerToRawData + size > m_filelen)
 			continue; // Image or file address out of bounds
 
 		memcpy(m_file + sect[i].PointerToRawData, src, sect[i].SizeOfRawData);

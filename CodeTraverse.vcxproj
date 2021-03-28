@@ -109,6 +109,12 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>Zydis.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>copy "$(SolutionDir)zydis\msvc\bin\$(Configuration)X86\Zydis.lib" "$(OutDir)Zydis.lib"</Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>Copying Zydis lib to build directory</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -129,6 +135,12 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>Zydis.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>copy "$(SolutionDir)zydis\msvc\bin\$(Configuration)X86\Zydis.lib" "$(OutDir)Zydis.lib"</Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>Copying Zydis lib to build directory</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -145,6 +157,12 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>Zydis.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>copy "$(SolutionDir)zydis\msvc\bin\$(Configuration)X64\Zydis.lib" "$(OutDir)Zydis.lib" </Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>Copying Zydis lib to build directory</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -165,6 +183,12 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>Zydis.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>copy "$(SolutionDir)zydis\msvc\bin\$(Configuration)X64\Zydis.lib" "$(OutDir)Zydis.lib" </Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>Copying Zydis lib to build directory</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

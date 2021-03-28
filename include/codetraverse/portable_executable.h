@@ -68,19 +68,28 @@ public:
 	* @brief	Constructs a mapped PE from file data with a size-limit (in KB) allowed for mapping
 	* @see		IsValid()
 	* 
-	* @param	FileData	Pointer to raw file data
+	* @param	FileData	Pointer to editable raw file data
+	* @see		WriteMappedToFile()
 	* @param	FileLen		Length of raw file data
 	* @param	SizeLimitKB	Limit (in KB) allowed to allocate for mapping. Invalidates PE if too large
 	*/
-	CPortableExecutable(const char* FileData, size_t FileLen, size_t SizeLimitKB = 1024 * 40);
+	CPortableExecutable(char* FileData, size_t FileLen, size_t SizeLimitKB = 1024 * 40);
 	CPortableExecutable() { }
 	~CPortableExecutable();
 
 	inline bool IsValid() const		{ return m_valid; }
 	inline bool Is64bit() const		{ return m_64bit; }
 
-	inline char* RawData() const	{ return m_img; }
-	inline size_t RawLen() const	{ return m_imglen; }
+	/**
+	* @brief	Pointer to unmapped file data. Call WriteFile
+	* @see		WriteMappedToFile()
+	*/
+	inline char* FileData() const	{ return m_file; }
+	inline size_t FileLen() const	{ return m_filelen; }
+
+	/** @brief	Pointer to mapped image data */
+	inline char* ImgData() const	{ return m_img; }
+	inline size_t ImgLen() const	{ return m_imglen; }
 	inline char* RawEnd() const		{ return m_img + m_imglen; }
 	inline bool IsInBounds(void* Loc, size_t Size = 0) const {
 		return Loc >= m_img && Loc <= RawEnd() - Size;
@@ -93,14 +102,21 @@ public:
 	inline const CNtOptionalHeader& OptionalHeader() const { return m_opthedr; }
 	inline const IMAGE_FILE_HEADER* FileHeader() const { return m_filehedr; }
 
+	/** @brief	Writes all mapped headers and sections back to unmapped file data */
+	void WriteMappedToFile();
+
 private:
 	template <class T = size_t>
 	inline bool IsSafeSize(T Size) const { return Size > 0 && Size < m_sizelimit; }
 
+	void PerformReloc(uint64_t NewBase, uint64_t OldBase);
+
 	bool		m_valid		= false;
 	bool		m_64bit		= false;
 	char*		m_img		= 0;
+	char*		m_file		= 0;
 	size_t		m_imglen	= 0;
+	size_t		m_filelen	= 0;
 	uint64_t	m_imgbase	= 0;
 	size_t		m_sizelimit	= 0;
 

@@ -6,17 +6,15 @@
 	#define NATIVE_64BIT 0
 #endif
 
-CPortableExecutable::CPortableExecutable(const char* FileData, size_t FileLen, size_t SizeLimitKB)
-	: m_sizelimit(SizeLimitKB * 1024)
+CPortableExecutable::CPortableExecutable(char* FileData, size_t FileLen, size_t SizeLimitKB)
+	: m_file(FileData), m_filelen(FileLen), m_sizelimit(SizeLimitKB * 1024)
 {
 	PIMAGE_DOS_HEADER dos = (PIMAGE_DOS_HEADER)FileData;
 	PIMAGE_NT_HEADERS nt;
 	PIMAGE_SECTION_HEADER		sect;
-	PIMAGE_BASE_RELOCATION		ibr;
 	PIMAGE_IMPORT_DESCRIPTOR	iid;
 	PIMAGE_EXPORT_DIRECTORY		ied;
-	size_t ibr_off, iid_off, ied_off;
-	uint64_t delta;
+	size_t iid_off, ied_off;
 
 	if (dos->e_magic != IMAGE_DOS_SIGNATURE)
 		return;
@@ -33,12 +31,10 @@ CPortableExecutable::CPortableExecutable(const char* FileData, size_t FileLen, s
 		!IsSafeSize(m_opthedr.SizeOfImage()))
 		return;
 
-	ibr_off = m_opthedr.DataDirectory()[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress;
 	iid_off = m_opthedr.DataDirectory()[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress;
 	ied_off = m_opthedr.DataDirectory()[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
 
-	if (!IsSafeSize(ibr_off) ||
-		(iid_off && !IsSafeSize(iid_off)) ||
+	if ((iid_off && !IsSafeSize(iid_off)) ||
 		(ied_off && !IsSafeSize(ied_off)))
 		return;
 
@@ -55,7 +51,6 @@ CPortableExecutable::CPortableExecutable(const char* FileData, size_t FileLen, s
 	m_img		= (char*)VirtualAlloc(0, m_imglen, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
 	sect	= (PIMAGE_SECTION_HEADER)((char*)nt + m_opthedr.SizeOfNtHeader());
-	ibr		= (PIMAGE_BASE_RELOCATION)(m_img + ibr_off);
 	iid		= (PIMAGE_IMPORT_DESCRIPTOR)(m_img + iid_off);
 	ied		= (PIMAGE_EXPORT_DIRECTORY)(m_img + ied_off);
 	if (m_opthedr.AddressOfEntryPoint())
@@ -66,32 +61,7 @@ CPortableExecutable::CPortableExecutable(const char* FileData, size_t FileLen, s
 		memcpy(m_img + sect[i].VirtualAddress, FileData + sect[i].PointerToRawData, sect[i].SizeOfRawData);
 
 	// Relocate pointers
-
-	delta = (uint64_t)m_img - m_imgbase;
-	for (auto reloc = ibr; reloc->VirtualAddress; reloc = (PIMAGE_BASE_RELOCATION)((char*)reloc + reloc->SizeOfBlock))
-	{
-		size_t count = (reloc->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(WORD);
-		WORD* list = (WORD*)(reloc + 1);
-		for (size_t i = 0; i < count; i++)
-		{
-			void* ptr = (void*)(m_img + ((uintptr_t)reloc->VirtualAddress + (list[i] & 0xFFF)));
-			switch ((list[i] >> 12) & 0xF)
-			{
-			case IMAGE_REL_BASED_LOW: *(WORD*)ptr += LOWORD(delta); break;
-			case IMAGE_REL_BASED_HIGH: *(WORD*)ptr += HIWORD(delta); break;
-			case IMAGE_REL_BASED_DIR64:
-				if (!NATIVE_64BIT && m_64bit)
-					;
-				else *(uint64_t*)ptr += delta;
-				break;
-			case IMAGE_REL_BASED_HIGHLOW:
-				if (NATIVE_64BIT && !m_64bit)
-					; // Leave unchanged. This way, a pointer can be distinguished if (ptr - imagebase) is a valid offset
-				else *(DWORD*)ptr += (DWORD)delta;
-				break;
-			}
-		}
-	}
+	PerformReloc((uint64_t)m_img, m_imgbase);
 
 	// List all imports
 	if (iid_off)
@@ -154,6 +124,71 @@ CPortableExecutable::~CPortableExecutable()
 {
 	if (m_img)
 		VirtualFree(m_img, 0, MEM_FREE);
+}
+
+void CPortableExecutable::WriteMappedToFile()
+{
+	const IMAGE_DOS_HEADER* dos = (PIMAGE_DOS_HEADER)m_img;
+	const IMAGE_NT_HEADERS* nt = (PIMAGE_NT_HEADERS)(m_img + dos->e_lfanew);
+	const IMAGE_SECTION_HEADER* sect;
+
+	// Write DOS, NT, and section headers back
+	memcpy(m_file, m_img, m_opthedr.SizeOfHeaders());
+
+	sect = (PIMAGE_SECTION_HEADER)((char*)nt + m_opthedr.SizeOfNtHeader());
+
+	for (int i = 0; i < nt->FileHeader.NumberOfSections; i++)
+	{
+		void* src = m_img + sect[i].VirtualAddress;
+		DWORD size = sect[i].SizeOfRawData;
+
+		if (!IsInBounds(src, size) || sect[i].PointerToRawData + size > m_filelen);
+			continue; // Image or file address out of bounds
+
+		memcpy(m_file + sect[i].PointerToRawData, src, sect[i].SizeOfRawData);
+	}
+}
+
+void CPortableExecutable::PerformReloc(uint64_t NewBase, uint64_t OldBase)
+{
+	const IMAGE_DATA_DIRECTORY*	ibr_dir;
+	PIMAGE_BASE_RELOCATION		ibr;
+	size_t		ibr_off;
+	uint64_t	delta;
+
+	ibr_dir = &m_opthedr.DataDirectory()[IMAGE_DIRECTORY_ENTRY_BASERELOC];
+	ibr_off = ibr_dir->VirtualAddress;
+	ibr = (PIMAGE_BASE_RELOCATION)(m_img + ibr_off);
+
+	if (!ibr_off || !IsInBounds(m_img + ibr_off, ibr_dir->Size))
+		return;
+
+	delta = NewBase - OldBase;
+
+	for (auto reloc = ibr; reloc->VirtualAddress; reloc = (PIMAGE_BASE_RELOCATION)((char*)reloc + reloc->SizeOfBlock))
+	{
+		size_t count = (reloc->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(WORD);
+		WORD* list = (WORD*)(reloc + 1);
+		for (size_t i = 0; i < count; i++)
+		{
+			void* ptr = (void*)(m_img + ((uintptr_t)reloc->VirtualAddress + (list[i] & 0xFFF)));
+			switch ((list[i] >> 12) & 0xF)
+			{
+			case IMAGE_REL_BASED_LOW: *(WORD*)ptr += LOWORD(delta); break;
+			case IMAGE_REL_BASED_HIGH: *(WORD*)ptr += HIWORD(delta); break;
+			case IMAGE_REL_BASED_DIR64:
+				if (!NATIVE_64BIT && m_64bit)
+					;
+				else *(uint64_t*)ptr += delta;
+				break;
+			case IMAGE_REL_BASED_HIGHLOW:
+				if (NATIVE_64BIT && !m_64bit)
+					; // Leave unchanged. This way, a pointer can be distinguished if (ptr - imagebase) is a valid offset
+				else *(DWORD*)ptr += (DWORD)delta;
+				break;
+			}
+		}
+	}
 }
 
 CNtOptionalHeader::CNtOptionalHeader(const void* pOptionalHeader)

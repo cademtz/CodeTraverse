@@ -110,7 +110,7 @@
       <AdditionalDependencies>Zydis.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy "$(SolutionDir)zydis\msvc\bin\$(Configuration)X86\Zydis.lib" "$(OutDir)Zydis.lib"</Command>
+      <Command>copy "$(ProjectDir)zydis\msvc\bin\$(Configuration)X86\Zydis.lib" "$(OutDir)Zydis.lib"</Command>
     </PostBuildEvent>
     <PostBuildEvent>
       <Message>Copying Zydis lib to build directory</Message>
@@ -136,7 +136,7 @@
       <AdditionalDependencies>Zydis.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy "$(SolutionDir)zydis\msvc\bin\$(Configuration)X86\Zydis.lib" "$(OutDir)Zydis.lib"</Command>
+      <Command>copy "$(ProjectDir)zydis\msvc\bin\$(Configuration)X86\Zydis.lib" "$(OutDir)Zydis.lib"</Command>
     </PostBuildEvent>
     <PostBuildEvent>
       <Message>Copying Zydis lib to build directory</Message>
@@ -158,7 +158,7 @@
       <AdditionalDependencies>Zydis.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy "$(SolutionDir)zydis\msvc\bin\$(Configuration)X64\Zydis.lib" "$(OutDir)Zydis.lib" </Command>
+      <Command>copy "$(ProjectDir)zydis\msvc\bin\$(Configuration)X64\Zydis.lib" "$(OutDir)Zydis.lib" </Command>
     </PostBuildEvent>
     <PostBuildEvent>
       <Message>Copying Zydis lib to build directory</Message>
@@ -184,7 +184,7 @@
       <AdditionalDependencies>Zydis.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy "$(SolutionDir)zydis\msvc\bin\$(Configuration)X64\Zydis.lib" "$(OutDir)Zydis.lib" </Command>
+      <Command>copy "$(ProjectDir)zydis\msvc\bin\$(Configuration)X64\Zydis.lib" "$(OutDir)Zydis.lib" </Command>
     </PostBuildEvent>
     <PostBuildEvent>
       <Message>Copying Zydis lib to build directory</Message>

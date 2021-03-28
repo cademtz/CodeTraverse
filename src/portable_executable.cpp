@@ -132,6 +132,10 @@ void CPortableExecutable::WriteMappedToFile()
 	const IMAGE_NT_HEADERS* nt = (PIMAGE_NT_HEADERS)(m_img + dos->e_lfanew);
 	const IMAGE_SECTION_HEADER* sect;
 
+	// Temporarily reverse relocations
+	// TODO: Support rebasing? Probably not that useful.
+	PerformReloc(m_imgbase, (uint64_t)m_img);
+
 	// Write DOS, NT, and section headers back
 	memcpy(m_file, m_img, m_opthedr.SizeOfHeaders());
 
@@ -142,11 +146,14 @@ void CPortableExecutable::WriteMappedToFile()
 		void* src = m_img + sect[i].VirtualAddress;
 		DWORD size = sect[i].SizeOfRawData;
 
-		if (!IsInBounds(src, size) || sect[i].PointerToRawData + size > m_filelen);
+		if (!IsInBounds(src, size) || (size_t)sect[i].PointerToRawData + size > m_filelen);
 			continue; // Image or file address out of bounds
 
 		memcpy(m_file + sect[i].PointerToRawData, src, sect[i].SizeOfRawData);
 	}
+
+	// Fix relocations again
+	PerformReloc((uint64_t)m_img, m_imgbase);
 }
 
 void CPortableExecutable::PerformReloc(uint64_t NewBase, uint64_t OldBase)

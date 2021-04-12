@@ -28,6 +28,9 @@ public:
 	size_t SizeOfNtHeader() const {
 		return m_64bit ? sizeof(IMAGE_NT_HEADERS64) : sizeof(IMAGE_NT_HEADERS32);
 	}
+	size_t SizeOfOptHeader() const {
+		return m_64bit ? sizeof(*m_hdr64) : sizeof(*m_hdr32);
+	}
 
 	DWORD AddressOfEntryPoint() const {
 		return m_64bit ? m_hdr64->AddressOfEntryPoint : m_hdr32->AddressOfEntryPoint;
@@ -91,16 +94,21 @@ public:
 	inline char* ImgData() const	{ return m_img; }
 	inline size_t ImgLen() const	{ return m_imglen; }
 	inline char* RawEnd() const		{ return m_img + m_imglen; }
-	inline bool IsInBounds(void* Loc, size_t Size = 0) const {
+	inline bool IsInBounds(const void* Loc, size_t Size = 0) const {
 		return Loc >= m_img && Loc <= RawEnd() - Size;
+	}
+	inline bool IsInFileBounds(const void* Loc, size_t Size = 0) const {
+		return Loc >= m_file && Loc <= m_file + m_filelen - Size;
 	}
 
 	inline uint64_t ImageBase() const	{ return m_imgbase; }
 	inline void* CodeEntry() const		{ return m_codeEntry; }
-	inline const std::list<PE_LocName>& Exports() const	{ return m_exports; }
-	inline const std::list<PE_Import>& Imports() const	{ return m_imports; }
-	inline const CNtOptionalHeader& OptionalHeader() const { return m_opthedr; }
-	inline const IMAGE_FILE_HEADER* FileHeader() const { return m_filehedr; }
+	inline const std::list<PE_LocName>& Exports() const		{ return m_exports; }
+	inline const std::list<PE_Import>& Imports() const		{ return m_imports; }
+	/**@brief Comes from exception handler directory, but holds other runtime methods too */
+	inline const std::list<void*>& Routines() const			{ return m_routines; }
+	inline const CNtOptionalHeader& OptionalHeader() const	{ return m_opthedr; }
+	inline const IMAGE_FILE_HEADER* FileHeader() const		{ return m_filehedr; }
 
 	/** @brief	Writes all mapped headers and sections back to unmapped file data */
 	void WriteMappedToFile();
@@ -108,6 +116,12 @@ public:
 private:
 	template <class T = size_t>
 	inline bool IsSafeSize(T Size) const { return Size > 0 && Size < m_sizelimit; }
+	template <class T = uint64_t>
+	inline bool IsSafeRva(T Rva, size_t Size = 1) const { return (uint64_t)Rva + Size <= m_imglen; }
+	inline bool IsSafeStr(const char* Str) const {
+		for (; IsInBounds(Str) && *Str; ++Str);
+		return IsInBounds(Str) && *Str == 0;
+	}
 
 	void PerformReloc(uint64_t NewBase, uint64_t OldBase);
 
@@ -124,6 +138,7 @@ private:
 	IMAGE_FILE_HEADER*		m_filehedr	= 0;
 	std::list<PE_LocName>	m_exports;
 	std::list<PE_Import>	m_imports;
+	std::list<void*>		m_routines;
 	CNtOptionalHeader		m_opthedr;
 };
 
@@ -143,6 +158,7 @@ public:
 	uint64_t Data() const {
 		return m_64bit ? m_thunk._64->u1.AddressOfData : m_thunk._32->u1.AddressOfData;
 	}
+	size_t Size() const { return m_64bit ? sizeof(uint64_t) : sizeof(uint32_t); }
 	void* Thunk() const { return *(void**)&m_thunk; }
 
 	CImageThunkData& operator++()

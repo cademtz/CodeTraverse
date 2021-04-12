@@ -155,8 +155,6 @@ CPortableExecutable::CPortableExecutable(char* FileData, size_t FileLen, size_t 
 		{
 			if (IsSafeRva(ife->StartingAddress))
 				m_routines.push_back(m_img + ife->StartingAddress);
-			else
-				DebugBreak();
 		}
 	}
 }

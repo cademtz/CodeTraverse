@@ -3,12 +3,13 @@
 #include <stdint.h>
 #include <list>
 #include <map>
+#include <stack>
+#include <vector>
 
 enum ETraverseUserCode;
 class CTraverse;
 
-typedef std::list<const void*> branches_t;
-typedef std::list<const void*> blocks_t;
+typedef std::stack<const void*, std::vector<const void*>> branches_t;
 typedef std::function
 	<ETraverseUserCode(CTraverse* Code, const void*& BranchAddr, bool IsMem)>
 	ct_onbranch_t;

@@ -118,14 +118,16 @@ TraverseFunc* CTraverse::Traverse_Func(const void* Entry)
 	if (!(func = _Traverse_Func(Entry, &de, &ins, &branches)))
 		return nullptr;
 
-	for (auto branch = branches.begin(); branch != branches.end(); branch = branches.erase(branch))
+	if (!branches.empty())
 	{
-		// Remove & skip if it's an existing function
-		auto ptr = *branch;
-		if (Find_FuncAt(ptr))
-			continue;
+		do
+		{
+			const void* loc = branches.top();
+			branches.pop();
 
-		_Traverse_Func(ptr, &de, &ins, &branches);
+			if (!Find_FuncAt(loc)) // New territory
+				_Traverse_Func(loc, &de, &ins, &branches);
+		} while (!branches.empty());
 	}
 
 	return func;
@@ -469,7 +471,7 @@ bool CTraverse::_Traverse_Block(TraverseBlock* Result,
 							break;
 					}
 					if (IsCode((const void*)addr))
-						Branches->push_back((const void*)addr);
+						Branches->push((const void*)addr);
 				}
 			}
 			break;

@@ -203,19 +203,15 @@ TraverseBlock* CTraverse::Find_Block(const void* Loc)
 
 TraverseBlock* CTraverse::Find_BlockAt(const void* Start)
 {
-	for (auto& block : m_blocks)
-	{
-		if (block.loc == Start)
-			return &block;
-	}
-	return 0;
+	auto it = std::find_if(m_blocks.begin(), m_blocks.end(), [Start](TraverseBlock& b) { return b.loc == Start; });
+	return it == m_blocks.end() ? 0 : &(*it);
 }
 
-size_t CTraverse::List_Blocks(TraverseBlock* Root, std::list<TraverseBlock*>& BlockList)
+size_t CTraverse::List_Blocks(TraverseBlock* Root,	blocklist_t& BlockList)
 {
 	size_t count = 1;
 
-	if (std::find(BlockList.begin(), BlockList.end(), Root) == BlockList.end())
+	if (std::find(BlockList.begin(), BlockList.end(), Root) != BlockList.end())
 		return 0;
 
 	BlockList.push_back(Root);
@@ -264,7 +260,7 @@ const TraversePage* CTraverse::IsInBoundsFlags(const void* Loc, size_t Size, uin
 	return 0;
 }
 
-bool CTraverse::_Recurse_Blocks(std::list<TraverseBlock*>& BlockList,
+bool CTraverse::_Recurse_Blocks(blocklist_t& BlockList,
 	const void* Block,
 	ZydisDecoder_* De,
 	ZydisDecodedInstruction_* Ins,
@@ -272,33 +268,25 @@ bool CTraverse::_Recurse_Blocks(std::list<TraverseBlock*>& BlockList,
 	ZydisFormatter_* Fmt)
 {
 	TraverseBlock* block = Find_BlockAt(Block);
-	bool was_new = !block;
-
-	if (!block)
+	if (!block) // Brand new territory
 	{
-		m_blocks.push_back({ 0 });
+		m_blocks.emplace_back();
 		block = &m_blocks.back();
 	}
-	else
+	else if (std::find(BlockList.cbegin(), BlockList.cend(), block) != BlockList.cend())
+		return true; // Already visited by this recursion
+	else // Was previously discovered somewhere else
 	{
-		// Did we already visit this? Prevent infinite loop.
-		for (TraverseBlock* other : BlockList)
-		{
-			if (other == block)
-				return true;
-		}
+		List_Blocks(block, BlockList);
+		return true;
 	}
 
-	// Prolly inefficient.. no logic is saved in blocks. One must traverse again to retrieve it
-	// WARNING: Side-effect is this will update blocks if any data was modified since last traversal
 	if (!_Traverse_Block(block, Block, De, Ins, Branches, Fmt))
 	{
-		if (was_new)
-			m_blocks.pop_back();
+		m_blocks.pop_back();
 		return false;
 	}
 
-	BlockList.push_back(block);
 	if (block->_block1)
 		_Recurse_Blocks(BlockList, block->_block1, De, Ins, Branches, Fmt);
 	if (block->_block2)
@@ -327,16 +315,16 @@ TraverseFunc* CTraverse::_Traverse_Func(const void* Entry,
 	func->entry = (const char*)Entry;
 	func->low = (*func->blocks.begin())->loc;
 
-	for (TraverseBlock* block : func->blocks)
+	for (TraverseBlock* block : func->blocks) // Find lowest address
 	{
 		if (block->loc < func->low)
 			func->low = block->loc;
 	}
-	for (TraverseBlock* block : func->blocks)
+	for (TraverseBlock* block : func->blocks) // Find highest address
 	{
 		uint64_t len = block->loc + block->len - func->low;
 		if (len > func->len)
-			func->len =len;
+			func->len = len;
 	}
 	return func;
 }

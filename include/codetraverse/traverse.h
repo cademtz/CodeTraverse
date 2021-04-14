@@ -1,15 +1,17 @@
 #pragma once
 #include <functional>
 #include <stdint.h>
+#include <vector>
+#include <stack>
 #include <list>
 #include <map>
-#include <stack>
-#include <vector>
 
 enum ETraverseUserCode;
+typedef struct _traverse_block TraverseBlock;
 class CTraverse;
 
 typedef std::stack<const void*, std::vector<const void*>> branches_t;
+typedef std::vector<TraverseBlock*> blocklist_t;
 typedef std::function
 	<ETraverseUserCode(CTraverse* Code, const void*& BranchAddr, bool IsMem)>
 	ct_onbranch_t;
@@ -73,7 +75,7 @@ typedef struct _traverse_func
 	const char* entry;	// - Entry point. May not be the lowest address belonging to it
 	const char* low;	// - Lowest code address of func code. Useful for copying all bytes
 	const char* name;	// - Optional
-	std::list<TraverseBlock*> blocks;
+	blocklist_t blocks;
 } TraverseFunc;
 
 class CTraverse
@@ -159,7 +161,6 @@ public:
 	*/
 	TraverseFunc* Find_FuncAt(const void* Entry);
 
-
 	/**
 	* @brief	Traverses the start of a code block
 	*			Any new blocks are appended to a list and their pointer returned.
@@ -191,7 +192,7 @@ public:
 	* @param	BlockList	Any list of TraverseBlock*. This method only adds unique pointers.
 	* @return	Number of items added to BlockList
 	*/
-	size_t List_Blocks(TraverseBlock* Root, std::list<TraverseBlock*>& BlockList);
+	size_t List_Blocks(TraverseBlock* Root, blocklist_t& BlockList);
 
 	const char* Read_String(const void* Loc, size_t MaxSize = 0) const;
 
@@ -244,20 +245,19 @@ private:
 
 	/**
 	* @brief	Recurses the start of a code block and all branching blocks (but not branching calls).
-	*			New blocks are added to m_blocks, and existing blocks are re-analyzed.
-	*			As a side effect, existing blocks will update if their data was edited prior.
+	*			New blocks are added to m_blocks, and all are added to BlockList.
 	* 
 	* @param	BlockList	A list of block pointers to be added to
 	* @param	Block		Start location of code
 	* @param	De			An initialized ZydisDecoder
 	* @param	Ins			Pointer to store a Zydis instruction in (Saves on stack mem)
-	* @param	Branches	(Optional) A list to populate with branching calls for more exploring
+	* @param	Branches	(Optional) Will be filled with unexplored branching calls
 	* @param	Fmt			(Optional) An initialized ZydisFormatter. Use to spew debug info
 	* @return	Indicates success
 	* @return	Indicates success
 	*/
 	bool _Recurse_Blocks(
-		std::list<TraverseBlock*>& BlockList,
+		blocklist_t& BlockList,
 		const void* Block,
 		struct ZydisDecoder_* De,
 		struct ZydisDecodedInstruction_* Ins,
@@ -299,6 +299,7 @@ private:
 	const char*	m_realaddr	= 0;
 	bool		m_64bit		= false;
 
+	// Using lists here so that items may be freely inserted/removed without performance toll
 	std::list<TraversePage>		m_pages;
 	std::list<TraverseBlock>	m_blocks;
 	std::list<TraverseFunc>		m_funcs;

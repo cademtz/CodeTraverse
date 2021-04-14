@@ -287,6 +287,8 @@ bool CTraverse::_Recurse_Blocks(blocklist_t& BlockList,
 		return false;
 	}
 
+	BlockList.push_back(block);
+
 	if (block->_block1)
 		_Recurse_Blocks(BlockList, block->_block1, De, Ins, Branches, Fmt);
 	if (block->_block2)

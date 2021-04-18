@@ -78,6 +78,9 @@ typedef struct _traverse_func
 	blocklist_t blocks;
 } TraverseFunc;
 
+typedef std::map<uintptr_t, TraverseFunc> funcmap_t;
+typedef std::map<uintptr_t, TraverseBlock> blockmap_t;
+
 class CTraverse
 {
 public:
@@ -105,10 +108,10 @@ public:
 	*/
 	ct_onbranch_t m_onbranch = 0;
 
-	inline std::list<TraversePage>&		Pages()		{ return m_pages; }
-	inline std::list<TraverseBlock>&	Blocks()	{ return m_blocks; }
-	inline std::list<TraverseFunc>&		Funcs()		{ return m_funcs; }
-	inline std::map<uint64_t, TraverseData>& Data()	{ return m_data; }
+	inline const std::list<TraversePage>&		Pages() const	{ return m_pages; }
+	inline const blockmap_t&					Blocks() const	{ return m_blocks; }
+	inline const funcmap_t&						Funcs()	const	{ return m_funcmap; }
+	inline std::map<uint64_t, TraverseData>&	Data()			{ return m_data; }
 
 	/**
 	* @brief	Adds (or overwrites) a page, making its memory visible to the traverser
@@ -180,7 +183,7 @@ public:
 	/**
 	* @brief	Finds an existing block by start address.
 	* @see		Find_Block()
-	* @param	Start	Points at start location of an existing code block
+	* @param	Addr	Points at start address of an existing code block
 	* @return	NULL on failure
 	*/
 	TraverseBlock* Find_BlockAt(const void* Start);
@@ -245,7 +248,7 @@ private:
 
 	/**
 	* @brief	Recurses the start of a code block and all branching blocks (but not branching calls).
-	*			New blocks are added to m_blocks, and all are added to BlockList.
+	*			All blocks are added to BlockList, while only new ones are added to m_blocks.
 	* 
 	* @param	BlockList	A list of block pointers to be added to
 	* @param	Block		Start location of code
@@ -301,7 +304,7 @@ private:
 
 	// Using lists here so that items may be freely inserted/removed without performance toll
 	std::list<TraversePage>		m_pages;
-	std::list<TraverseBlock>	m_blocks;
-	std::list<TraverseFunc>		m_funcs;
+	std::map<uintptr_t, TraverseBlock> m_blocks;
+	std::map<uintptr_t, TraverseFunc> m_funcmap;
 	std::map<uint64_t, TraverseData> m_data;
 };

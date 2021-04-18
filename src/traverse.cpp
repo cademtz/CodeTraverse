@@ -136,12 +136,11 @@ TraverseFunc* CTraverse::Traverse_Func(const void* Entry)
 TraverseFunc* CTraverse::Find_Func(const void* Loc)
 {
 	TraverseBlock* found;
-
 	if (!(found = Find_Block(Loc)))
 		return 0;
-
-	for (auto& func : m_funcs)
+	for (auto& pair : m_funcmap)
 	{
+		TraverseFunc& func = pair.second;
 		if (Loc >= func.low && Loc < func.low + func.len)
 		{
 			for (TraverseBlock* block : func.blocks)
@@ -156,12 +155,8 @@ TraverseFunc* CTraverse::Find_Func(const void* Loc)
 
 TraverseFunc* CTraverse::Find_FuncAt(const void* Entry)
 {
-	for (auto& func : m_funcs)
-	{
-		if (func.entry == Entry)
-			return &func;
-	}
-	return nullptr;
+	auto it = m_funcmap.find((uintptr_t)Entry);
+	return it == m_funcmap.end() ? 0 : &(*it).second;
 }
 
 TraverseBlock* CTraverse::Traverse_Block(const void* Block)
@@ -176,38 +171,42 @@ TraverseBlock* CTraverse::Traverse_Block(const void* Block)
 		return found;
 
 	if (ZYAN_FAILED(ZydisDecoderInit(&de,
-			m_64bit ? ZYDIS_MACHINE_MODE_LONG_64 : ZYDIS_MACHINE_MODE_LONG_COMPAT_32,
-			m_64bit ? ZYDIS_ADDRESS_WIDTH_64 : ZYDIS_ADDRESS_WIDTH_32)))
+		m_64bit ? ZYDIS_MACHINE_MODE_LONG_64 : ZYDIS_MACHINE_MODE_LONG_COMPAT_32,
+		m_64bit ? ZYDIS_ADDRESS_WIDTH_64 : ZYDIS_ADDRESS_WIDTH_32)))
 	{
 		assert(0 && "Failed to initialize Zydis");
 		return nullptr;
 	}
 
 	if (_Traverse_Block(&block, Block, &de, &ins, 0, 0))
-	{
-		m_blocks.push_back(block);
-		return &m_blocks.back();
-	}
+		return &(m_blocks[(uintptr_t)block.loc] = block);
 	return nullptr;
 }
 
-TraverseBlock* CTraverse::Find_Block(const void* Loc)
+TraverseBlock* CTraverse::Find_Block(const void* Addr)
 {
-	for (auto& block : m_blocks) // Check single blocks
+	auto it = m_blocks.lower_bound((uintptr_t)Addr);
+	if (it != m_blocks.end())
 	{
-		if (Loc >= block.loc && Loc < block.loc + block.len)
-			return &block;
+		do // Iterate backwards to lower addresses
+		{
+			TraverseBlock* block = &(*it).second;
+			if (block->loc + block->len > Addr) // block->loc always <= Addr
+				return block;
+
+			it--;
+		} while (it != m_blocks.begin());
 	}
 	return nullptr;
 }
 
 TraverseBlock* CTraverse::Find_BlockAt(const void* Start)
 {
-	auto it = std::find_if(m_blocks.begin(), m_blocks.end(), [Start](TraverseBlock& b) { return b.loc == Start; });
-	return it == m_blocks.end() ? 0 : &(*it);
+	auto it = m_blocks.find((uintptr_t)Start);
+	return it == m_blocks.end() ? 0 : &(*it).second;
 }
 
-size_t CTraverse::List_Blocks(TraverseBlock* Root,	blocklist_t& BlockList)
+size_t CTraverse::List_Blocks(TraverseBlock* Root, blocklist_t& BlockList)
 {
 	size_t count = 1;
 
@@ -269,21 +268,17 @@ bool CTraverse::_Recurse_Blocks(blocklist_t& BlockList,
 {
 	TraverseBlock* block = Find_BlockAt(Block);
 	if (!block) // Brand new territory
+		block = &m_blocks[(uintptr_t)Block];
+	else // Already discovered
 	{
-		m_blocks.emplace_back();
-		block = &m_blocks.back();
-	}
-	else if (std::find(BlockList.cbegin(), BlockList.cend(), block) != BlockList.cend())
-		return true; // Already visited by this recursion
-	else // Was previously discovered somewhere else
-	{
-		List_Blocks(block, BlockList);
+		if (std::find(BlockList.cbegin(), BlockList.cend(), block) == BlockList.cend())
+			List_Blocks(block, BlockList); // Was not visited by this recursion. Append all child blocks
 		return true;
 	}
 
 	if (!_Traverse_Block(block, Block, De, Ins, Branches, Fmt))
 	{
-		m_blocks.pop_back();
+		m_blocks.erase((uintptr_t)Block);
 		return false;
 	}
 
@@ -303,17 +298,19 @@ TraverseFunc* CTraverse::_Traverse_Func(const void* Entry,
 	ZydisFormatter_* Fmt)
 {
 	TraverseFunc* func;
-	TraverseBlock* block = 0;
+	if (func = Find_FuncAt(Entry))
+		return func;
 
-	m_funcs.push_back({ 0 });
-	func = &m_funcs.back();
+	func = &m_funcmap[(uintptr_t)Entry];
 
 	if (!_Recurse_Blocks(func->blocks, Entry, De, Ins, Branches, Fmt))
 	{
-		m_funcs.pop_back();
+		m_funcmap.erase((uintptr_t)Entry);
 		return nullptr;
 	}
 
+	func->name = 0;
+	func->len = 0;
 	func->entry = (const char*)Entry;
 	func->low = (*func->blocks.begin())->loc;
 
